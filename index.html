@@ -1,1 +1,124 @@
-hi
+// Full 3D Racing Game (Google Sites Compatible)
+// Uses Three.js via CDN (works in embedded HTML)
+
+import React from "react";
+
+export default function Info() {
+  return (
+    <div className="p-4">
+      <h1 className="text-xl">How to use this in Google Sites</h1>
+      <p>1. Copy the HTML file below</p>
+      <p>2. Host it (GitHub Pages or similar)</p>
+      <p>3. Embed using iframe in Google Sites</p>
+
+      <pre className="text-xs overflow-auto bg-black text-green-400 p-2 mt-4">
+{`<!DOCTYPE html>
+<html>
+<head>
+  <title>3D Racing Game</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #ui { position: absolute; top: 10px; left: 10px; color: white; }
+    button { margin: 5px; }
+  </style>
+</head>
+<body>
+<div id="ui">
+  <button onclick="togglePause()">Pause</button>
+  <button onclick="toggleFullscreen()">Fullscreen</button>
+  <select onchange="changeCar(this.value)">
+    <option value="0">Sport</option>
+    <option value="1">Truck</option>
+    <option value="2">Formula</option>
+  </select>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+
+<script>
+let scene = new THREE.Scene();
+let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+let renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+let cars = [
+  { color: 0xff0000, speed: 0.2 },
+  { color: 0x0000ff, speed: 0.1 },
+  { color: 0xffff00, speed: 0.3 }
+];
+
+let carIndex = 0;
+let carMesh;
+let speed = cars[0].speed;
+
+function createCar() {
+  if (carMesh) scene.remove(carMesh);
+  let geometry = new THREE.BoxGeometry(1, 0.5, 2);
+  let material = new THREE.MeshStandardMaterial({ color: cars[carIndex].color });
+  carMesh = new THREE.Mesh(geometry, material);
+  scene.add(carMesh);
+  speed = cars[carIndex].speed;
+}
+
+createCar();
+
+let roadGeo = new THREE.PlaneGeometry(20, 200);
+let roadMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+let road = new THREE.Mesh(roadGeo, roadMat);
+road.rotation.x = -Math.PI / 2;
+scene.add(road);
+
+let light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(5,10,5);
+scene.add(light);
+
+camera.position.set(0, 3, 5);
+
+let keys = {};
+window.addEventListener("keydown", e => keys[e.key] = true);
+window.addEventListener("keyup", e => keys[e.key] = false);
+
+let paused = false;
+
+function togglePause(){ paused = !paused; }
+
+function toggleFullscreen(){
+  if (!document.fullscreenElement) document.body.requestFullscreen();
+  else document.exitFullscreen();
+}
+
+function changeCar(i){ carIndex = i; createCar(); }
+
+function animate() {
+  requestAnimationFrame(animate);
+  if (!paused) {
+    if (keys["ArrowLeft"]) carMesh.position.x -= speed;
+    if (keys["ArrowRight"]) carMesh.position.x += speed;
+    if (keys["ArrowUp"]) carMesh.position.z -= speed;
+    if (keys["ArrowDown"]) carMesh.position.z += speed;
+
+    camera.position.x = carMesh.position.x;
+    camera.position.z = carMesh.position.z + 5;
+    camera.lookAt(carMesh.position);
+  }
+  renderer.render(scene, camera);
+}
+
+animate();
+</script>
+</body>
+</html>`}
+      </pre>
+
+      <p className="mt-4">This is now a full 3D racing game starter with:</p>
+      <ul className="list-disc ml-6">
+        <li>3D environment (Three.js)</li>
+        <li>Multiple cars</li>
+        <li>Camera follow system</li>
+        <li>Pause + fullscreen</li>
+        <li>Google Sites compatible</li>
+      </ul>
+    </div>
+  );
+}
