@@ -2,171 +2,162 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Advanced 3D Racing Game</title>
+<title>Full Racing Game</title>
 <style>
 body { margin:0; overflow:hidden; background:black; font-family:Arial; }
 #ui { position:absolute; top:10px; left:10px; color:white; z-index:10; }
-#speed,#lap { font-size:18px; }
+#speed,#lap,#pos,#count { font-size:18px; }
+#count { font-size:40px; }
 </style>
 </head>
 <body>
 
 <div id="ui">
+  <div id="count">3</div>
   <div id="speed">Speed: 0</div>
   <div id="lap">Lap: 1</div>
+  <div id="pos">Position: 1</div>
 </div>
 
-<!-- IMPORTANT: This is PURE HTML + JS. DO NOT run as .tsx or through a React/TypeScript build system -->
-<!-- Rename file to index.html if needed -->
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.152.2/build/three.module.js';
+import { GLTFLoader } from 'https://unpkg.com/three@0.152.2/examples/jsm/loaders/GLTFLoader.js';
 
-<script src="https://unpkg.com/three@0.152.2/build/three.min.js"></script>
-<script src="https://unpkg.com/three@0.152.2/examples/js/loaders/GLTFLoader.js"></script>
-
-<script>
-// =========================
-// BASIC TESTS (sanity checks)
-// =========================
-console.assert(typeof THREE !== 'undefined', 'THREE failed to load');
-
-// SETUP
+// SCENE
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({antialias:true});
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 3000);
+const renderer = new THREE.WebGLRenderer({ antialias:true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-console.assert(renderer.domElement instanceof HTMLCanvasElement, 'Renderer failed');
-
 // LIGHT
-const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(50,100,50);
-scene.add(light);
+const sun = new THREE.DirectionalLight(0xffffff,1);
+sun.position.set(100,200,100);
+scene.add(sun);
 
 // GROUND
 const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(500,500),
-  new THREE.MeshStandardMaterial({color:0x228B22})
+  new THREE.PlaneGeometry(2000,2000),
+  new THREE.MeshStandardMaterial({ color:0x2e8b57 })
 );
 ground.rotation.x = -Math.PI/2;
 scene.add(ground);
 
-// TRACK
-const track = [];
-for(let i=0;i<100;i++){
-  track.push(new THREE.Vector3(Math.sin(i*0.2)*10,0,-i*10));
+// TRACK + CHECKPOINTS
+const track=[];
+const checkpoints=[];
+for(let i=0;i<400;i++){
+  let p = new THREE.Vector3(Math.sin(i*0.1)*20,0,-i*10);
+  track.push(p);
+  if(i%50===0) checkpoints.push(p.clone());
 }
-
-console.assert(track.length === 100, 'Track generation failed');
 
 // PLAYER
-let player, velocity=0, direction=0, lap=1;
-
-// FIX: ensure loader exists
-if(!THREE.GLTFLoader){
-  console.error('GLTFLoader failed to load');
-}
-
-const loader = new THREE.GLTFLoader();
-
-loader.load(
+let player;
+new GLTFLoader().load(
   'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMilkTruck/glTF/CesiumMilkTruck.gltf',
-  function(gltf){
-    player = gltf.scene;
-    player.scale.set(0.5,0.5,0.5);
-    scene.add(player);
-  },
+  gltf=>{ player=gltf.scene; player.scale.set(0.5,0.5,0.5); scene.add(player); },
   undefined,
-  function(){
-    console.warn('Model failed, using fallback');
-    const fallback = new THREE.Mesh(
-      new THREE.BoxGeometry(1,0.5,2),
-      new THREE.MeshStandardMaterial({color:0x00ff00})
-    );
-    player = fallback;
+  ()=>{
+    player=new THREE.Mesh(new THREE.BoxGeometry(1,0.5,2),new THREE.MeshStandardMaterial({color:0x00ff00}));
     scene.add(player);
   }
 );
 
 // AI
-const aiCars = [];
-for(let i=0;i<3;i++){
-  const car = new THREE.Mesh(
-    new THREE.BoxGeometry(1,0.5,2),
-    new THREE.MeshStandardMaterial({color:0xff0000})
-  );
+const aiCars=[];
+for(let i=0;i<4;i++){
+  const car=new THREE.Mesh(new THREE.BoxGeometry(1,0.5,2),new THREE.MeshStandardMaterial({color:0xff0000}));
   scene.add(car);
-  aiCars.push({mesh:car, progress:i*10});
+  aiCars.push({mesh:car,progress:i*60});
 }
 
-console.assert(aiCars.length === 3, 'AI creation failed');
-
 // INPUT
-let keys={};
+const keys={};
 window.addEventListener('keydown',e=>keys[e.key]=true);
 window.addEventListener('keyup',e=>keys[e.key]=false);
 
 // PHYSICS
-const accel = 0.02;
-const friction = 0.98;
-const turnSpeed = 0.03;
-const maxSpeed = 1;
-let nitro = 0;
+let velocity=0, angle=0, drift=0, lap=1, checkpointIndex=0;
+
+const accel=0.02, friction=0.97, turnSpeed=0.04, driftFactor=0.92, maxSpeed=2;
+
+// COUNTDOWN
+let countdown=3;
+let started=false;
+const countEl=document.getElementById('count');
+let interval=setInterval(()=>{
+  countdown--;
+  if(countdown<=0){ countEl.innerText="GO"; started=true; clearInterval(interval); }
+  else countEl.innerText=countdown;
+},1000);
 
 // LOOP
 function animate(){
   requestAnimationFrame(animate);
   if(!player) return;
 
-  if(keys['ArrowUp']) velocity += accel;
-  else velocity *= friction;
+  if(started){
+    if(keys['ArrowUp']) velocity+=accel;
+    else velocity*=friction;
 
-  if(keys['Shift']) nitro = 0.05;
-  else nitro *= 0.9;
+    velocity=Math.min(maxSpeed,velocity);
 
-  velocity = Math.min(maxSpeed, velocity + nitro);
+    if(keys['ArrowLeft']) angle+=turnSpeed;
+    if(keys['ArrowRight']) angle-=turnSpeed;
 
-  if(keys['ArrowLeft']) direction += turnSpeed;
-  if(keys['ArrowRight']) direction -= turnSpeed;
+    drift+=(angle-drift)*0.1;
+    drift*=driftFactor;
 
-  player.rotation.y = direction;
-  player.position.x += Math.sin(direction)*velocity;
-  player.position.z -= Math.cos(direction)*velocity;
+    player.rotation.y=drift;
+    player.position.x+=Math.sin(drift)*velocity;
+    player.position.z-=Math.cos(drift)*velocity;
 
-  // collision bounds
-  if(Math.abs(player.position.x) > 15) velocity *= 0.5;
+    // CHECKPOINTS
+    let cp=checkpoints[checkpointIndex];
+    if(player.position.distanceTo(cp)<10){
+      checkpointIndex++;
+      if(checkpointIndex>=checkpoints.length){
+        checkpointIndex=0;
+        lap++;
+        document.getElementById('lap').innerText='Lap: '+lap;
+      }
+    }
 
-  // AI follow track
-  aiCars.forEach(ai=>{
-    ai.progress += 0.1;
-    let idx = Math.floor(ai.progress)%track.length;
-    ai.mesh.position.copy(track[idx]);
-  });
+    // AI
+    aiCars.forEach(ai=>{
+      ai.progress+=0.3;
+      let idx=Math.floor(ai.progress)%track.length;
+      ai.mesh.position.copy(track[idx]);
+    });
 
-  // laps
-  if(player.position.z < -900){
-    player.position.z = 0;
-    lap++;
-    document.getElementById('lap').innerText = 'Lap: '+lap;
+    // POSITION
+    let rank=1;
+    aiCars.forEach(ai=>{
+      if(ai.progress > checkpointIndex*50) rank++;
+    });
+    document.getElementById('pos').innerText='Position: '+rank;
+
+    // UI
+    document.getElementById('speed').innerText='Speed: '+Math.floor(velocity*200);
   }
 
-  // camera
-  camera.position.set(player.position.x, 5, player.position.z + 10);
+  camera.position.set(player.position.x,8,player.position.z+15);
   camera.lookAt(player.position);
-
-  document.getElementById('speed').innerText = 'Speed: '+Math.floor(velocity*200);
 
   renderer.render(scene,camera);
 }
 animate();
 
-// resize
+// RESIZE
 window.addEventListener('resize',()=>{
-  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.aspect=window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(window.innerWidth,window.innerHeight);
 });
+
 </script>
 
 </body>
