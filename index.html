@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Full Racing Game</title>
+<title>racing gaem</title>
 <style>
 body { margin:0; overflow:hidden; background:black; font-family:Arial; }
 #ui { position:absolute; top:10px; left:10px; color:white; z-index:10; }
@@ -19,15 +19,20 @@ body { margin:0; overflow:hidden; background:black; font-family:Arial; }
   <div id="pos">Position: 1</div>
 </div>
 
-<script type="module">
-import * as THREE from 'https://unpkg.com/three@0.152.2/build/three.module.js';
-import { GLTFLoader } from 'https://unpkg.com/three@0.152.2/examples/jsm/loaders/GLTFLoader.js';
+<!-- FIX: Use NON-module scripts (GitHub Pages safe) -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/loaders/GLTFLoader.js"></script>
+
+<script>
+// BASIC TEST
+console.assert(typeof THREE !== 'undefined', 'THREE failed to load');
 
 // SCENE
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 3000);
+
 const renderer = new THREE.WebGLRenderer({ antialias:true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
@@ -53,15 +58,25 @@ for(let i=0;i<400;i++){
   track.push(p);
   if(i%50===0) checkpoints.push(p.clone());
 }
+console.assert(track.length === 400, 'Track failed');
 
 // PLAYER
 let player;
-new GLTFLoader().load(
+const loader = new THREE.GLTFLoader();
+loader.load(
   'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMilkTruck/glTF/CesiumMilkTruck.gltf',
-  gltf=>{ player=gltf.scene; player.scale.set(0.5,0.5,0.5); scene.add(player); },
+  function(gltf){
+    player = gltf.scene;
+    player.scale.set(0.5,0.5,0.5);
+    scene.add(player);
+  },
   undefined,
-  ()=>{
-    player=new THREE.Mesh(new THREE.BoxGeometry(1,0.5,2),new THREE.MeshStandardMaterial({color:0x00ff00}));
+  function(){
+    console.warn('Model failed, using fallback');
+    player = new THREE.Mesh(
+      new THREE.BoxGeometry(1,0.5,2),
+      new THREE.MeshStandardMaterial({color:0x00ff00})
+    );
     scene.add(player);
   }
 );
@@ -69,10 +84,14 @@ new GLTFLoader().load(
 // AI
 const aiCars=[];
 for(let i=0;i<4;i++){
-  const car=new THREE.Mesh(new THREE.BoxGeometry(1,0.5,2),new THREE.MeshStandardMaterial({color:0xff0000}));
+  const car=new THREE.Mesh(
+    new THREE.BoxGeometry(1,0.5,2),
+    new THREE.MeshStandardMaterial({color:0xff0000})
+  );
   scene.add(car);
   aiCars.push({mesh:car,progress:i*60});
 }
+console.assert(aiCars.length === 4, 'AI failed');
 
 // INPUT
 const keys={};
